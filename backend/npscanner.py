@@ -1,4 +1,3 @@
-from sae_lens import SAE
 from torch import Tensor
 import torch
 from transformer_lens import HookedTransformer, ActivationCache
@@ -18,6 +17,7 @@ class FeatureBias:
     vector:Tensor
     bias:float
     layer:int
+    name:str
     
 @dataclass
 class NPScanResult:
@@ -34,6 +34,11 @@ class NPScanResult:
     highestFeature:Tensor
 
 class NPScanner:
+    """
+    an NPSCanner can scan each layer for the highest activation difference based on what should activate(positive) and what should not activate(negative).
+    This can be used to find the layer that best represents whats in the positive inputs, as well as its score and all other layers score differences.
+    You can insert this difference vector into an NPSteerer to steer the model in the direction of the difference vector.
+    """
     def __init__(self, model:HookedTransformer, layerIDs:list[str]):
         self.model = model
         self.layerIDs = layerIDs
@@ -50,10 +55,10 @@ class NPScanner:
         Returns:
             Tensor
         """
-        saes = self.saes
-        if not (-len(saes) <= layer < len(saes)):
-            raise IndexError("SAE Layer " + str(layer) + " is out of range! There are only " + str(len(saes)) + " SAE layers!")
-        sae = self.saes[layer]
+        layerIDs = self.layerIDs
+        if not (-len(layerIDs) <= layer < len(layerIDs)):
+            raise IndexError("Layer " + str(layer) + " is out of range! There are only " + str(len(layerIDs)) + " layers!")
+        layerID = self.layerIDs[layer]
         model = self.model
         # Tokenize input
         tokens = model.to_tokens(input)
@@ -62,7 +67,7 @@ class NPScanner:
         skip_ids = [model.to_single_token(t) for t in skip_tokens]
         mask = torch.tensor([t.item() not in skip_ids for t in token_ids])
         # load activations
-        acts = cache[sae.id]
+        acts = cache[layerID]
         # Get mean/run mask
         acts = acts[0]
         acts = acts[mask]
@@ -70,8 +75,7 @@ class NPScanner:
     
     def scan_layers(self, pos_inputs:list[str], neg_inputs:list[str], skip_tokens:list[str]) -> NPScanResult:
         """
-        Scan each layer for the highest activation difference based on what should activate(positive) and what should not activate(negative).
-        This can be used to find the layer that best represents whats in the positive inputs, as well as its score and all other layers score differences.
+        Scans each layer and returns the highest activation difference.
         
         Args:
             pos_inputs (list[str]): List of positive inputs
@@ -81,7 +85,7 @@ class NPScanner:
         Returns:
             NPScanResult
         """
-        numLayers = len(self.saes)
+        numLayers = len(self.layerIDs)
         layer_diffs:list[Tensor] = []
         pos_caches:list[ActivationCache] = [self.model.run_with_cache(self.model.to_tokens(input))[1] for input in pos_inputs]
         neg_caches:list[ActivationCache] = [self.model.run_with_cache(self.model.to_tokens(input))[1] for input in neg_inputs]
@@ -127,7 +131,4 @@ class NPScanner:
         Returns:
             FeatureBias
         """
-        return FeatureBias(scanRes.highestFeature, bias, scanRes.highestLayer)
-    
-    def get_ids(self) -> list[str]:
-        return [sae.id for sae in self.saes]
+        return FeatureBias(scanRes.highestFeature, bias, scanRes.highestLayer, "Unnamed")

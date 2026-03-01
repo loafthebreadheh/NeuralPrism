@@ -1,5 +1,6 @@
-from scanner import NPScanner
-from steerer import NPSteerer
+from npscanner import NPScanner
+from npsteerer import NPSteerer
+from npprofile import NPProfile
 from transformer_lens import HookedTransformer
 import transformer_lens
 from sae_lens import SAE
@@ -35,3 +36,12 @@ steerer = NPSteerer(features).hookOnModel(model)
 tokens = model.to_tokens("In the ancient kingdom, the programmer")
 output = model.generate(tokens, max_new_tokens=20)
 print(model.to_string(output[0]))
+
+print("Saving profile!")
+profile = NPProfile(features)
+# Neural Prism Bias Profile
+profile.save("profile.npbp")
+print("Profile saved! Loading profile...")
+
+profile = NPProfile.load("profile.npbp")
+print(f"Profile loaded! {len(profile.biases)} biases found!")

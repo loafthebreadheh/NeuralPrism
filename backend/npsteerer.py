@@ -1,9 +1,12 @@
-from scanner import NPScanner, FeatureBias
+from npscanner import NPScanner, FeatureBias
 from transformer_lens import HookedTransformer
 
 class NPSteerer:
-    def __init__(self, feature_biases:list[FeatureBias],):
-        self.biases = feature_biases
+    """
+    Steers the currently hooked model in the direction * bias of all FeatureBias in the biases array.
+    """
+    def __init__(self, biases:list[FeatureBias]):
+        self.biases = biases
         self.curHandles = []
         self.model = None
         
@@ -16,17 +19,28 @@ class NPSteerer:
         return hook
     
     
-    def hookOnModel(self, model:HookedTransformer) -> "NPSteerer":
-        self.unhookFromModel()
+    def hookOnModel(self, model:HookedTransformer, unhook:bool = True) -> "NPSteerer":
+        """
+        Hooks this steerer on the model.
+        
+        Args:
+            model (HookedTransformer): The model to hook on.
+            unhook (bool, optional): Whether to unhook from the previous model. Defaults to True.
+            
+        Returns:
+            NPSteerer: For chaining.
+        """
+        if unhook:
+            self.unhookFromModel()
         self.model = model
-        biases_by_layer = {}
+        biasesByLayer = {}
         for bias in self.biases:
-            if bias.layer not in biases_by_layer:
-                biases_by_layer[bias.layer] = []
-            biases_by_layer[bias.layer].append(bias)
+            if bias.layer not in biasesByLayer:
+                biasesByLayer[bias.layer] = []
+            biasesByLayer[bias.layer].append(bias)
             
         # only hook layers that have biases
-        for layer, biases in biases_by_layer.items():
+        for layer, biases in biasesByLayer.items():
             def make_hook(fBiases:list[FeatureBias]):
                 def hook(module, input, output):
                     for bias in fBiases:
@@ -39,6 +53,9 @@ class NPSteerer:
         return self
     
     def unhookFromModel(self):
+        """
+        Unhooks this steerer from the currently hooked model.
+        """
         for handle in self.curHandles:
             handle.remove()
         self.curHandles.clear()
