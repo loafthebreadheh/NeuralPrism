@@ -16,7 +16,7 @@ function ScanWindow({ onClose }: { onClose: () => void }) {
     ])
 
     return (
-        <NPWindow name="Scan" onClose={onClose} defaultSize={{width: 300, height: 495.8}} bounds={{ x: 0, y: 0 + 35, w: window.innerWidth, h: window.innerHeight }}>
+        <NPWindow name="Scan" onClose={onClose} defaultSize={{width: 300, height: 495.8}} bounds={() => ({ x: 0, y: 35, w: window.innerWidth, h: window.innerHeight - 35 })} fitToBounds={true}>
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 <NPEditableList label="Positive inputs" items={positive} onChange={setPositive} />
                 <NPEditableList label="Negative inputs" items={negative} onChange={setNegative} />

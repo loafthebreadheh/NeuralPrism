@@ -4,26 +4,42 @@ const clamp = (val:number, min:number, max:number) => Math.max(min, Math.min(max
 
 const BORDER = 6
 type ResizeDir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+type Bounds = { x:number, y:number, w:number, h:number }
 
-function NPWindow({ name, children, onClose, defaultPos, defaultSize, bounds }: {
+function NPWindow({ name, children, onClose, defaultPos, defaultSize, bounds, fitToBounds }: {
     name:string
     children: React.ReactNode
     onClose?: () => void
     defaultPos?: { x:number, y:number }
     defaultSize?: { width:number, height:number }
-    bounds?: { x:number, y:number, w:number, h:number }
+    bounds?: Bounds | (() => Bounds)
+    fitToBounds?: boolean
 }) {
     const [pos, setPos] = useState(defaultPos ?? { x: 100, y: 100 })
+    const sizeRef = useRef(defaultSize ?? { width: 300, height: 200 })
     const [size, setSize] = useState(defaultSize ?? { width: 300, height: 200 })
-    const clampPos = (x:number, y:number) => {
-        const minX = bounds?.x ?? 0
-        const minY = bounds?.y ?? 0
-        const maxX = (bounds ? bounds.x + bounds.w : window.innerWidth) - size.width
-        const maxY = (bounds ? bounds.y + bounds.h : window.innerHeight) - size.height
-        return {
-            x: clamp(x, minX, maxX),
-            y: clamp(y, minY, maxY),
-        }
+    const boundsRef = useRef(bounds)
+    const fitToBoundsRef = useRef(fitToBounds)
+
+    const updateSize = (newSize: { width:number, height:number }) => {
+        sizeRef.current = newSize
+        setSize(newSize)
+    }
+
+    const getBounds = (): Bounds | undefined =>
+        typeof boundsRef.current === 'function' ? boundsRef.current() : boundsRef.current
+
+    const maxW = () => getBounds()?.w ?? window.innerWidth
+    const maxH = () => getBounds()?.h ?? window.innerHeight
+    const minX = () => getBounds()?.x ?? 0
+    const minY = () => getBounds()?.y ?? 0
+    const maxX = () => {
+        const b = getBounds()
+        return (b ? b.x + b.w : window.innerWidth) - sizeRef.current.width
+    }
+    const maxY = () => {
+        const b = getBounds()
+        return (b ? b.y + b.h : window.innerHeight) - sizeRef.current.height
     }
 
     const dragging = useRef(false)
@@ -31,10 +47,6 @@ function NPWindow({ name, children, onClose, defaultPos, defaultSize, bounds }: 
     const resizing = useRef(false)
     const resizeDir = useRef<ResizeDir>('se')
     const resizeStart = useRef({ mx: 0, my: 0, x: 0, y: 0, w: 0, h: 0 })
-
-    useEffect(() => {
-        setPos(p => clampPos(p.x, p.y))
-    }, [])
 
     const onTitleMouseDown = (e:React.MouseEvent) => {
         e.stopPropagation()
@@ -45,7 +57,10 @@ function NPWindow({ name, children, onClose, defaultPos, defaultSize, bounds }: 
     }
     const handleDragMove = (e:MouseEvent) => {
         if (!dragging.current) return
-        setPos(clampPos(e.clientX - dragOffset.current.x, e.clientY - dragOffset.current.y))
+        setPos({
+            x: clamp(e.clientX - dragOffset.current.x, minX(), maxX()),
+            y: clamp(e.clientY - dragOffset.current.y, minY(), maxY()),
+        })
     }
     const handleDragUp = () => {
         dragging.current = false
@@ -53,15 +68,15 @@ function NPWindow({ name, children, onClose, defaultPos, defaultSize, bounds }: 
         window.removeEventListener('mouseup', handleDragUp)
     }
 
-    const onResizeMouseDown = (e:React.MouseEvent, dir: ResizeDir) => {
+    const onResizeMouseDown = (e:React.MouseEvent, dir:ResizeDir) => {
         e.stopPropagation()
         resizing.current = true
         resizeDir.current = dir
-        resizeStart.current = { mx: e.clientX, my: e.clientY, x: pos.x, y: pos.y, w: size.width, h: size.height }
+        resizeStart.current = { mx: e.clientX, my: e.clientY, x: pos.x, y: pos.y, w: sizeRef.current.width, h: sizeRef.current.height }
         window.addEventListener('mousemove', handleResizeMove)
         window.addEventListener('mouseup', handleResizeUp)
     }
-    const handleResizeMove = (e: MouseEvent) => {
+    const handleResizeMove = (e:MouseEvent) => {
         if (!resizing.current) return
         const { mx, my, x, y, w, h } = resizeStart.current
         const dx = e.clientX - mx
@@ -72,15 +87,14 @@ function NPWindow({ name, children, onClose, defaultPos, defaultSize, bounds }: 
         if (dir.includes('s')) nh = Math.max(100, h + dy)
         if (dir.includes('w')) { nw = Math.max(150, w - dx); nx = x + (w - nw) }
         if (dir.includes('n')) { nh = Math.max(100, h - dy); ny = y + (h - nh) }
-    
-        // clamp position but compensate size so right/bottom edge stays fixed
-        const clampedX = clamp(nx, 0, window.innerWidth - nw)
-        const clampedY = clamp(ny, 0, window.innerHeight - nh)
+
+        const clampedX = clamp(nx, minX(), maxX() + sizeRef.current.width - nw)
+        const clampedY = clamp(ny, minY(), maxY() + sizeRef.current.height - nh)
         if (dir.includes('w')) nw += nx - clampedX
         if (dir.includes('n')) nh += ny - clampedY
-    
+
         setPos({ x: clampedX, y: clampedY })
-        setSize({ width: Math.max(150, nw), height: Math.max(100, nh) })
+        updateSize({ width: Math.max(150, nw), height: Math.max(100, nh) })
     }
     const handleResizeUp = () => {
         resizing.current = false
@@ -88,15 +102,32 @@ function NPWindow({ name, children, onClose, defaultPos, defaultSize, bounds }: 
         window.removeEventListener('mouseup', handleResizeUp)
     }
 
-    useEffect(() => {
-        setPos(p => clampPos(p.x, p.y))
+    const applyFitAndClamp = () => {
+        console.log('bounds:', getBounds())
+    console.log('size:', sizeRef.current)
+    console.log('minX:', minX(), 'maxX:', maxX(), 'minY:', minY(), 'maxY:', maxY())
+    console.log('fitToBounds:', fitToBoundsRef.current)
+    console.log('typeof bounds:', typeof boundsRef.current)
+        if (fitToBoundsRef.current) {
+            const w = maxW()
+            const h = maxH()
+            if (sizeRef.current.width > w || sizeRef.current.height > h) {
+                updateSize({
+                    width: Math.min(sizeRef.current.width, w),
+                    height: Math.min(sizeRef.current.height, h),
+                })
+            }
+        }
+        setPos(p => ({ x: clamp(p.x, minX(), maxX()), y: clamp(p.y, minY(), maxY()) }))
+    }
 
-        const onResize = () => setPos(p => clampPos(p.x, p.y))
-        window.addEventListener('resize', onResize)
-        return () => window.removeEventListener('resize', onResize)
+    useEffect(() => {
+        applyFitAndClamp()
+        window.addEventListener('resize', applyFitAndClamp)
+        return () => window.removeEventListener('resize', applyFitAndClamp)
     }, [])
 
-    const edge = (dir: ResizeDir, style:React.CSSProperties) => (
+    const edge = (dir:ResizeDir, style:React.CSSProperties) => (
         <div onMouseDown={e => onResizeMouseDown(e, dir)} style={{ position: 'absolute', ...style }} />
     )
 
