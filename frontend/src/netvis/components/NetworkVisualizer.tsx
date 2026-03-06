@@ -199,8 +199,8 @@ function NetworkVisualizer({
                 if (g) {
                     g.clear()
                     layers.forEach((layer, li) =>
-                        layer.forEach((neuron) => {
-                            const activation = activationCache[li][neuron.realIndex]
+                        layer.forEach((neuron, ni) => {
+                            const activation = activationCache[li][ni]
                             if (activation < 0.5) return
                             const intensity = (activation - 0.5) / 0.5
                             const baseRadius = neuronRadius + activation * neuronRadius * 0.5

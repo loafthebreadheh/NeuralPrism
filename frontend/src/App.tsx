@@ -1,6 +1,10 @@
 import NetworkVisualizer from "./netvis/components/NetworkVisualizer"
 import { Client, ScanResult } from "./api/client";
 import { useState, useEffect } from 'react'
+import ScanWindow from "./ui/ScanWindow";
+import NPTopBar from "./ui/elements/NPTopBar";
+import NPButton from "./ui/elements/NPButton";
+import { Input } from "@/components/ui/input"
 
 let scanRes: ScanResult = {
     name: "Medieval - Scanning...",
@@ -40,6 +44,7 @@ export async function InitApp(setStatus: (s: string) => void) {
 function App() {
     const [numLayers, setNumLayers] = useState(0)
     const [nPerLayer, setNPerLayer] = useState([0])
+    const [scanWindowOpen, setScanWindowOpen] = useState(false)
     const [status, setStatus] = useState("Loading...")
 
     useEffect(() => {
@@ -52,6 +57,10 @@ function App() {
     return (
         <div style={{ width: "100%", height: "100%", position: "relative" }}>
             <NetworkVisualizer numLayers={numLayers} nPerLayer={nPerLayer} nActivations={scanRes.layer_diffs} highestLayer={scanRes.highest_layer}/>
+            <NPTopBar>
+                <NPButton onClick={() => setScanWindowOpen(true)}>Scan</NPButton>
+            </NPTopBar>
+            {scanWindowOpen && <ScanWindow onClose={() => setScanWindowOpen(false)} />}
             {status && (
                 <div style={{
                     position: "absolute",

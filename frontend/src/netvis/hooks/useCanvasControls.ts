@@ -32,7 +32,8 @@ export function useCanvasControls(getCanvas: () => HTMLCanvasElement | null) {
             e.preventDefault()
             isDragging.current = true
             lastPointer.current = { x: e.clientX, y: e.clientY }
-            curOffsetRef.current = { ...targetOffset.current }
+            targetOffset.current = { ...curOffsetRef.current }
+            targetScale.current = curScaleRef.current
         }
 
         const onPointerMove = (e: PointerEvent) => {
